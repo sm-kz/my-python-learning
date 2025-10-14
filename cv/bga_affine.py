@@ -3,7 +3,6 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 import os
-from rotation_judge import rotation_angle
 from typing import Union
 
 
@@ -24,7 +23,8 @@ def center_affine_transform(image_path: Union[str, np.ndarray], angle: float = 0
         img = cv2.imread(image_path)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         #threshold, processed img      img, thresh, maxval, threshold type 
-        ret, img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
+        thresh, img = cv2.threshold(img, 200, 255, cv2.THRESH_BINARY)
+
     elif type(image_path) is np.ndarray:
         img = image_path
     else:

@@ -59,6 +59,7 @@ def rotation_angle(image_mats: list[np.ndarray]):
     score = 0                                   #正表示需要与正向模板匹配，负表示需要与非正向模板匹配
     k = 1                                       #如果传入的样本过少，需要调节变量tolerance
     ignored_digit = [0 for i in range(0, 9)]    #屏蔽对应位的数字，从1开始
+
     """保存交点位置"""
     cross_points = np.int32([[[0 for i in range(0, 3)] for i in range(0, 2)] for i in range(0, 9)])
     
