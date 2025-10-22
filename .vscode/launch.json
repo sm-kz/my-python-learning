@@ -2,12 +2,25 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: Current File",
+            "name": "(gdb) Launch",
+            "type": "cppdbg",
             "request": "launch",
-            "program": "test1.py",
-            "type": "python",
-            "console": "integratedTerminal",
-            "justMyCode": true
+            "program": "${fileDirname}/${fileBasenameNoExtension}.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "PYTHONHOME",
+                    "value": "E:/miniconda/envs/cv"
+                },
+                {
+                    "name": "PATH",
+                    "value": "E:/miniconda/envs/cv;${env:PATH}"
+                }
+            ],
+            "externalConsole": false,
+            "preLaunchTask": "build with python"
         }
     ]
 }

@@ -18,8 +18,11 @@ def transitions(neighbours):
     return sum( (n1, n2) == (0, 1) for n1, n2 in zip(n, n[1:]) )  # (P2,P3), (P3,P4), ... , (P8,P9), (P9,P2)
 
 def zhangSuen(image):
-    "the Zhang-Suen Thinning Algorithm"
-    Image_Thinned = image.copy()  # deepcopy to protect the original image
+    """
+    the Zhang-Suen Thinning Algorithm
+    输入图像需要为二值图像, 前景像素值为1, 背景像素值为0
+    """
+    Image_Thinned = image.copy()    # deepcopy to protect the original image
     changing1 = changing2 = 1        #  the points to be removed (set as 0)
     while changing1 or changing2:   #  iterates until no further changes occur in the image
         # Step 1
@@ -81,7 +84,6 @@ def enhanced_upscale(image, target_size=(100, 100)):
     
     return final
 
-
 def multi_scale_upscale(image, target_size=(100, 100)):
     """
     多尺度融合放大
@@ -92,7 +94,7 @@ def multi_scale_upscale(image, target_size=(100, 100)):
     
     for scale in scales:
         # 计算当前尺度目标尺寸
-        current_size = (target_size[0]//scale, target_size[1]//scale)
+        current_size = (target_size[0]//scale, target_size[1]//scale)       
         upscaled = cv2.resize(image, current_size, interpolation=cv2.INTER_CUBIC)
         # 再放大到目标尺寸
         final_upscaled = cv2.resize(upscaled, target_size, interpolation=cv2.INTER_LANCZOS4)
@@ -103,39 +105,48 @@ def multi_scale_upscale(image, target_size=(100, 100)):
     
     return fused
 
+def denoising(image):
+    height, width = image.shape[:2]
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (height // 20, width // 20))     #矩形卷积核
+    denoised_img = cv2.morphologyEx(image, cv2.MORPH_OPEN, kernel)                      #开运算去噪
+    return denoised_img
+
 def thickening(thin_img, ksize=(5, 5), iterations=2, preserve_features=True):
     """
     对细化后的数字进行加粗
     iterations越大、ksize越大, 线越粗
     """
     if preserve_features:
-        # 使用椭圆核，大小5*5。 更好地保持圆形特征
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, ksize)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, ksize)    # 使用椭圆核，大小5*5。 更好地保持圆形特征
     else:
-        # 使用矩形核，更均匀的加粗
-        kernel = np.ones(ksize, np.uint8)
+        kernel = np.ones(ksize, np.uint8)                               # 使用矩形核，更均匀的加粗
     
-    # 分阶段加粗
-    stage1 = cv2.dilate(thin_img, kernel, iterations=iterations)
+    stage1 = cv2.dilate(thin_img, kernel, iterations=iterations)        # 分阶段加粗
     
-    # 可选：轻微腐蚀以平滑边缘
+    # 轻微腐蚀以平滑边缘
     kernel_small = np.ones(tuple(map(lambda x: x // 2, ksize)), np.uint8)
     smoothed = cv2.morphologyEx(stage1, cv2.MORPH_OPEN, kernel_small)
     
     return smoothed
 
 def digit_sharpening(image: str):
+    """
+    返回图像为0, 1化的矩阵.前景为文字像素, 值为1
+    """
     img = cv2.imread(image, cv2.IMREAD_GRAYSCALE)
-    img = enhanced_upscale(img, (100, 100))
-    th, img = cv2.threshold(img, 200, 255, cv2.THRESH_BINARY)
-    img = img < th
-    img = zhangSuen(img)
-    img = img.astype(np.uint8)
-    img = multi_scale_upscale(img, (500, 500))
-    return thickening(img)
+    img = enhanced_upscale(img, (100, 100))                     #放大模糊图像,尺寸太大会增加细化时间
+    th, img = cv2.threshold(img, 160, 255, cv2.THRESH_BINARY)   #二值化
+    img = img < th                                              #01化并反转前景和背景
+    img = denoising(img.astype(np.uint8))                       #去噪
+    img = zhangSuen(img)                                        #细化
+    img = img.astype(np.uint8)                                  #转换像素类型
+    img = multi_scale_upscale(img, (500, 500))                  #第二次放大
+    img = thickening(img)                                       #加粗前景
+    return img                                                  #反转前景和背景
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    img = digit_sharpening('./images/dtcdig/1/1.png_cropped_4.jpg')
+    img = digit_sharpening('./images/dtcdig/1/1.png_cropped_2.jpg')
+    print(img)
     plt.imshow(img)
     plt.show()

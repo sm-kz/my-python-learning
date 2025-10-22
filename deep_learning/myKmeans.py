@@ -53,11 +53,18 @@ def myKmeans(points: np.array, clusternum: int, itertimes: int = 10):
             all_labels.append(labels)
     all_points = np.vstack(all_points)
     all_labels = np.hstack(all_labels)
-    return all_points, all_labels
+    return all_points, all_labels, clusters
+
+def print_centerpts():
+    points = np.random.uniform(0, 5, (1000, 2))
+    dummy1, dummy2, clusters= myKmeans(points, 10, 10)
+    for cluster, i in zip(clusters, range(10)):
+        print(f"centerX{i+1} = {cluster.centeroid[0]}, centerY{i+1} = {cluster.centeroid[1]}")
+
 
 if __name__ == "__main__":
     points = np.random.uniform(0, 5, (1000, 2))
-    all_points, all_labels = myKmeans(points, 10, 10)
+    all_points, all_labels, dummy = myKmeans(points, 10, 10)
     plt.scatter(all_points[:, 0], all_points[:, 1], s=18, c=all_labels)
     plt.colorbar()
     plt.show()
