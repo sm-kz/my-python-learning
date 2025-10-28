@@ -5,49 +5,53 @@ import os
 from typing import Union
 from blurred_digimg_processing import digit_sharpening
 
+"""
+下面是匹配模板, 对应不同角度(顺时针旋转)下的数字模板. 模板匹配采用了水平和垂直方向的线各三条, 模板的axis0表示每个数字的特征; 
+axis1表示垂直线(前三, 从左到右)、水平线(后三, 从上到下)与数字的特征交点; axis2表示交点的位置左(上)/中/右(下)
+"""
 template_0 = np.int32([[[1, 0, 0], [1, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1], [0, 0, 1]],    #1
                         [[1, 0, 2], [1, 0, 2], [1, 1, 1], [1, 0, 1], [0, 0, 1], [1, 0, 0]],   #2
-                        [[1, 0, 1], [1, 1, 1], [1, 1, 1], [0, 0, 1], [0, 0, 1], [1, 0, 1]],   #3
-                        [[1, 0, 1], [1, 0, 1], [1, 0, 1], [0, 1, 1], [1, 0, 1], [0, 0, 1]],   #4
-                        [[2, 0, 1], [2, 0, 1], [2, 0, 1], [1, 0, 0], [1, 0, 1], [1, 0, 1]],   #5
-                        [[1, 1, 1], [2, 0, 1], [1, 1, 1], [1, 0, 0], [2, 0, 1], [1, 0, 1]],   #6
+                        [[1, 1, 1], [1, 1, 1], [1, 1, 1], [0, 0, 1], [0, 0, 1], [1, 0, 1]],   #3
+                        [[0, 1, 1], [1, 0, 1], [1, 0, 1], [0, 1, 1], [1, 0, 1], [1, 0, 1]],   #4!
+                        [[1, 1, 1], [2, 0, 1], [1, 1, 1], [1, 0, 0], [0, 0, 1], [0, 0, 1]],   #5!
+                        [[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 0, 0], [1, 0, 1], [1, 0, 1]],   #6!
                         [[1, 0, 0], [1, 0, 1], [1, 1, 0], [0, 0, 1], [0, 0, 1], [0, 1, 0]],   #7
-                        [[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 0, 1], [1, 0, 1], [1, 0, 1]],   #8
-                        [[1, 1, 1], [1, 0, 2], [1, 1, 1], [1, 0, 1], [1, 0, 1], [0, 0, 1]]])  #9
+                        [[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 0, 1], [1, 0, 1], [1, 0, 1]],   #8!
+                        [[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 0, 1], [1, 0, 1], [0, 0, 1]]])  #9!
 
-template_90 = np.int32([[[0, 0, 1], [0, 0, 1], [1, 0, 1], [0, 0, 1], [0, 0, 1], [0, 0, 1]],
-                        [[1, 0, 0], [0, 0, 1], [1, 0, 1], [2, 0, 1], [2, 0, 1], [1, 1, 1]],
-                        [[1, 0, 1], [0, 0, 1], [0, 0, 1], [1, 0, 1], [1, 1, 1], [1, 1, 1]],
-                        [[0, 0, 1], [1, 0, 1], [1, 0, 1], [1, 1, 0], [1, 0, 1], [1, 0, 1]],
-                        [[1, 0, 1], [1, 0, 1], [1, 0, 0], [1, 0, 2], [1, 0, 2], [1, 0, 2]],
-                        [[1, 0, 1], [2, 0, 1], [1, 0, 0], [1, 1, 1], [1, 0, 2], [1, 1, 1]],
-                        [[0, 1, 0], [0, 0, 1], [0, 0, 1], [0, 0, 1], [1, 0, 1], [0, 1, 1]],
-                        [[1, 0, 1], [0, 1, 0], [1, 0, 1], [1, 1, 1], [1, 1, 1], [1, 1, 1]],
-                        [[0, 0, 1], [1, 0, 1], [1, 0, 1], [1, 1, 1], [2, 0, 1], [1, 1, 1]]])
+template_90 = np.int32([[[0, 0, 1], [0, 0, 1], [1, 0, 1], [0, 0, 1], [0, 0, 1], [0, 0, 1]],   #1
+                        [[1, 0, 0], [0, 0, 1], [1, 0, 1], [2, 0, 1], [2, 0, 1], [1, 1, 1]],   #2
+                        [[1, 0, 1], [0, 0, 1], [0, 0, 1], [1, 0, 1], [1, 1, 1], [1, 1, 1]],   #3
+                        [[1, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 0], [1, 0, 1], [1, 0, 1]],   #4
+                        [[0, 0, 1], [0, 0, 1], [1, 0, 0], [1, 1, 1], [1, 0, 2], [1, 1, 1]],   #5
+                        [[1, 0, 1], [1, 0, 1], [1, 0, 0], [1, 1, 1], [1, 1, 1], [1, 1, 1]],   #6
+                        [[0, 1, 0], [0, 0, 1], [0, 0, 1], [0, 0, 1], [1, 0, 1], [0, 1, 1]],   #7
+                        [[1, 0, 1], [0, 1, 0], [1, 0, 1], [1, 1, 1], [1, 1, 1], [1, 1, 1]],   #8
+                        [[0, 0, 1], [1, 0, 1], [1, 0, 1], [1, 1, 1], [1, 1, 1], [1, 1, 1]]])  #9
 
-template_180 = np.int32([[[0, 0, 1], [0, 0, 1], [0, 0, 1], [1, 0, 0], [1, 0, 0], [1, 0, 1]],
-                        [[1, 1, 1], [2, 0, 1], [2, 0, 1], [0, 0, 1], [1, 0, 0], [1, 0, 1]],
-                        [[1, 1, 1], [1, 1, 1], [1, 0, 1], [1, 0, 1], [1, 0, 0], [1, 0, 0]],
-                        [[1, 0, 1], [1, 0, 1], [1, 0, 1], [1, 0, 0], [1, 0, 1], [1, 1, 0]],
-                        [[1, 0, 2], [1, 0, 2], [1, 0, 2], [1, 0, 1], [1, 0, 1], [0, 0, 1]],
-                        [[1, 1, 1], [1, 0, 2], [1, 1, 1], [1, 0, 1], [1, 0, 2], [0, 0, 1]],
-                        [[0, 1, 1], [1, 0, 1], [0, 0, 1], [0, 1, 0], [1, 0, 0], [1, 0, 0]],
-                        [[1, 1, 1], [1, 1, 1], [1 ,1, 1], [1, 0, 1], [1, 0, 1], [1, 0, 1]],
-                        [[1, 1, 1], [2, 0, 1], [1, 1, 1], [1, 0, 0], [1, 0, 1], [1, 0, 1]]])
+template_180 = np.int32([[[0, 0, 1], [0, 0, 1], [0, 0, 1], [1, 0, 0], [1, 0, 0], [1, 0, 1]],  #1
+                        [[1, 1, 1], [2, 0, 1], [2, 0, 1], [0, 0, 1], [1, 0, 0], [1, 0, 1]],   #2
+                        [[1, 1, 1], [1, 1, 1], [1, 0, 1], [1, 0, 1], [1, 0, 0], [1, 0, 0]],   #3
+                        [[1, 0, 1], [1, 0, 1], [1, 1, 0], [1, 0, 1], [1, 0, 1], [1, 1, 0]],   #4
+                        [[1, 1, 1], [1, 0, 2], [1, 1, 1], [1, 0, 0], [1, 0, 0], [0, 0, 1]],   #5
+                        [[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 0, 1], [1, 0, 1], [0, 0, 1]],   #6
+                        [[0, 1, 1], [1, 0, 1], [0, 0, 1], [0, 1, 0], [1, 0, 0], [1, 0, 0]],   #7
+                        [[1, 1, 1], [1, 1, 1], [1 ,1, 1], [1, 0, 1], [1, 0, 1], [1, 0, 1]],   #8
+                        [[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 0, 0], [1, 0, 1], [1, 0, 1]]])  #9
 
-template_270 = np.int32([[[1, 0, 1], [1, 0, 0], [1, 0, 0], [1, 0, 0], [1, 0, 0], [1, 0, 0]],
-                        [[1, 0, 1], [1, 0, 0], [0, 0, 1], [1, 1, 1], [1, 0, 2], [1, 0, 2]],
-                        [[1, 0, 0], [1, 0, 0], [1, 0, 1], [1, 1, 1], [1, 1, 1], [1, 0, 1]],
-                        [[1, 1, 0], [1, 0, 1], [1, 0, 0], [1, 0, 1], [1, 0, 1], [1, 0, 1]],
-                        [[0, 0, 1], [1, 0, 1], [1, 0, 1], [2, 0, 1], [2, 0, 1], [2, 0, 1]],
-                        [[0, 0, 1], [1, 0, 2], [1, 0, 1], [1, 1, 1], [2, 0, 1], [1, 1, 1]],
-                        [[1, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 1], [1, 0, 0]],
-                        [[1, 0, 1], [1, 0, 1], [1, 0, 1], [1, 1, 1], [1, 1, 1], [1, 1, 1]],
-                        [[1, 0, 1], [1, 0, 1], [1, 0, 0], [1, 1, 1], [1, 0, 2], [1, 1, 1]]])
+template_270 = np.int32([[[1, 0, 1], [1, 0, 0], [1, 0, 0], [1, 0, 0], [1, 0, 0], [1, 0, 0]],  #1
+                        [[1, 0, 1], [1, 0, 0], [0, 0, 1], [1, 1, 1], [1, 0, 2], [1, 0, 2]],   #2
+                        [[1, 0, 0], [1, 0, 0], [1, 0, 1], [1, 1, 1], [1, 1, 1], [1, 0, 1]],   #3
+                        [[1, 1, 0], [1, 0, 1], [1, 0, 1], [1, 0, 1], [1, 0, 1], [0, 1, 1]],   #4
+                        [[0, 0, 1], [1, 0, 0], [1, 0, 0], [1, 1, 1], [2, 0, 1], [1, 1, 1]],   #5
+                        [[0, 0, 1], [1, 0, 1], [1, 0, 1], [1, 1, 1], [1, 1, 1], [1, 1, 1]],   #6
+                        [[1, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 1], [1, 0, 0]],   #7
+                        [[1, 0, 1], [1, 0, 1], [1, 0, 1], [1, 1, 1], [1, 1, 1], [1, 1, 1]],   #8
+                        [[1, 0, 1], [1, 0, 1], [1, 0, 0], [1, 1, 1], [1, 1, 1], [1, 1, 1]]])  #9
 
 templates = [template_0, template_90, template_180, template_270]
 
-def crop_bounding_rect(image: cv2.typing.MatLike, precut_edge: int = 0, bitwisenot=False, need01=False):
+def crop_bounding_rect(image: np.ndarray, precut_edge: int = 0, bitwisenot=False, need01=False):
     """
     brief:  切取数字的最小外接矩形
     param:  @image:         要剪切的图像
@@ -170,7 +174,8 @@ def get_matched_template(templates: list[np.ndarray], to_match: np.ndarray):
     """
     matched_tpl = (1 << 4)
     matched_more = []
-    for i in range(0, 4):
+    #这里顺序为3、1、0、2表示270°匹配优先级最高、90°次之...
+    for i in [3, 1, 0, 2]:
         for j in range(0, 9):
             dev = sum(sum((templates[i][j] - to_match) ** 2))
             if dev < min_dev: 
@@ -207,17 +212,17 @@ def rotation_angle(image_mats: list[np.ndarray]):
         hlines = (height // 4, height // 2, height * 3 // 4)
         vlines = (width // 4, width // 2, width * 3 // 4)
 
-        # cv2.line(image_mat, (vlines[0], 0), [vlines[0], height], 127)
-        # cv2.line(image_mat, (vlines[1], 0), [vlines[1], height], 127)
-        # cv2.line(image_mat, (vlines[2], 0), [vlines[2], height], 127)
-        # cv2.line(image_mat, (0, hlines[0]), [width, hlines[0]], 127)
-        # cv2.line(image_mat, (0, hlines[1]), [width, hlines[1]], 127)
-        # cv2.line(image_mat, (0, hlines[2]), [width, hlines[2]], 127)
+        cv2.line(image_mat, (vlines[0], 0), [vlines[0], height], 127)
+        cv2.line(image_mat, (vlines[1], 0), [vlines[1], height], 127)
+        cv2.line(image_mat, (vlines[2], 0), [vlines[2], height], 127)
+        cv2.line(image_mat, (0, hlines[0]), [width, hlines[0]], 127)
+        cv2.line(image_mat, (0, hlines[1]), [width, hlines[1]], 127)
+        cv2.line(image_mat, (0, hlines[2]), [width, hlines[2]], 127)
 
-        thick_uppper = int(3 / 5 * height)              #线宽上阈值，超过该值将线视为两个交点
+        thick_uppper = int(1 / 2 * height)              #线宽上阈值，超过该值将线视为两个交点
         thick_bottom = int(1 / 40 * height)             #线宽下阈值，低于该值不被视为交点
-        mid_treshold = int(1 / 12 * height)              #距离中点距离小于该值被视为中点交点
-        sepspace = int(1 / 12 * height)                 #穿过的空白区域小于该阈值视为连通
+        mid_treshold = int(1 / 14 * height)              #距离中点距离小于该值被视为中点交点
+        sepspace = int(1 / 50 * height)                 #穿过的空白区域小于该阈值视为连通
 
         #垂直线
         for i in range(0, len(vlines)):
@@ -247,14 +252,14 @@ def rotation_angle(image_mats: list[np.ndarray]):
                         elif pixel_cnt > thick_uppper:                      #穿过的连通区域大于上阈值，被视为两个点
                             add_cross_point(cross_points, (height, width), old, i, mid_treshold)
                             add_cross_point(cross_points, (height, width), j - space_cnt, i, mid_treshold)
-                        pixel_cnt = old = 0
+                        pixel_cnt = old = space_cnt = 0
             space_cnt = pixel_cnt = 0
 
         #如果采用digit_sharpening函数对图像进行了处理，这里就可以注释掉
-        thick_uppper = int(3 / 5 * width)            #线宽上阈值，超过该值将线视为两个交点
+        thick_uppper = int(1 / 2 * width)            #线宽上阈值，超过该值将线视为两个交点
         thick_bottom = int(1 / 40 * width)           #线宽下阈值，低于该值不被视为交点
         mid_treshold = int(1 / 12 * width)            #距离中点距离小于该值被视为中点交点
-        sepspace = int(1 / 12 * width)               #穿过的空白区域小于该阈值视为连通
+        sepspace = int(1 / 50 * width)               #穿过的空白区域小于该阈值视为连通
 
         #水平线
         for i in range(0, len(hlines)):
@@ -284,8 +289,9 @@ def rotation_angle(image_mats: list[np.ndarray]):
                         elif pixel_cnt > thick_uppper:                      #穿过的连通区域大于上阈值，被视为两个点
                             add_cross_point(cross_points, (height, width), old, i + len(vlines), mid_treshold)
                             add_cross_point(cross_points, (height, width), j - space_cnt, i + len(vlines), mid_treshold)
-                        pixel_cnt = old = 0
+                        pixel_cnt = old = space_cnt = 0
 
+        #计算得分
         tpl_idx, more = get_matched_template(templates, cross_points)
         if tpl_idx & (1 << 3):
             scores[tpl_idx & 3] += 1
@@ -296,18 +302,20 @@ def rotation_angle(image_mats: list[np.ndarray]):
         else:
             scores[tpl_idx] += 4
 
+    # print(cross_points)
+
     max_score = max(scores)
     best_match = scores.index(max_score)
     # print(f"max score: {max_score}, best match: {best_match}")
-    return (360 - best_match * 90) % 360, image_mat
+    # return (360 - best_match * 90) % 360, image_mat
 
-    # return (360 - best_match * 90) % 360
+    return (360 - best_match * 90) % 360
 
     
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
-    image_paths = ["./images/dtcdig/7/7.jpg_cropped_{}.jpg".format(i) for i in (2,)]
+    image_paths = ["./images/dtcdig/{0}/{0}.jpg_cropped_{1}.jpg".format(7, i) for i in (4, 5)]
     plt.figure(figsize=(14, 6))
 
     image_mats = []
@@ -319,11 +327,11 @@ if __name__ == "__main__":
         )
         image_mats.append(image_mat)
 
-    angle, image_mat = rotation_angle(image_mats)
+    angle = rotation_angle(image_mats)
     print(angle)
 
-    plt.imshow(image_mat)
-    plt.title("cropped Image")
+    # plt.imshow(image_mat)
+    # plt.title("cropped Image")
     
-    plt.tight_layout()
-    plt.show()
+    # plt.tight_layout()
+    # plt.show()
