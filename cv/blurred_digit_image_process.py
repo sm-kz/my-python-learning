@@ -14,6 +14,7 @@ def neighbours(x, y, image):
     return [ img[x_1][y], img[x_1][y1], img[x][y1], img[x1][y1],     # P2,P3,P4,P5
                 img[x1][y], img[x1][y_1], img[x][y_1], img[x_1][y_1] ]    # P6,P7,P8,P9
 
+
 def transitions(neighbours):
     """
     brief:  以特定顺序,从0到1的变换出现的次数
@@ -22,6 +23,7 @@ def transitions(neighbours):
     """
     n = neighbours + neighbours[0:1]      # P2, P3, ... , P8, P9, P2
     return sum( (n1, n2) == (0, 1) for n1, n2 in zip(n, n[1:]) )  # (P2,P3), (P3,P4), ... , (P8,P9), (P9,P2)
+
 
 def zhangSuen(image):
     """
@@ -64,6 +66,7 @@ def zhangSuen(image):
             Image_Thinned[x][y] = 0
     return Image_Thinned
 
+
 def enhanced_upscale(image, target_size=(100, 100)):
     """
     brief:  增强型放大
@@ -91,6 +94,7 @@ def enhanced_upscale(image, target_size=(100, 100)):
     
     return final
 
+
 def multi_scale_upscale(image, target_size=(100, 100)):
     """
     brief:  多尺度融合放大
@@ -114,6 +118,7 @@ def multi_scale_upscale(image, target_size=(100, 100)):
     fused = np.mean(upscaled_images, axis=0).astype(np.uint8)
     
     return fused
+
 
 def denoising(image, area_threshold=60, kernel_length=3):
     """
@@ -158,6 +163,43 @@ def denoising(image, area_threshold=60, kernel_length=3):
     
     return final
 
+
+def laplacian_var(image: str | cv2.typing.MatLike):
+    """
+    brief:  使用Laplacian梯度方差评估图像清晰度值越大, 图像越清晰
+    param:  @image: 传入的图像路径
+    return: 归一化的图像质量评分
+    """
+
+    #图像质量对照表
+    image_quality = {
+        'Low':      1000,
+        'Middle':   10000,
+        'High':     20000,
+        'SuperHigh':30000
+    }
+
+    if type(image) is str:
+        img = cv2.imread(image, cv2.IMREAD_GRAYSCALE)
+    else: 
+        img = image
+    
+    # 应用Laplacian算子并计算方差
+    laplacian = cv2.Laplacian(img, cv2.CV_16U).var()
+    
+    #判断清晰度等级
+    if  laplacian > image_quality['SuperHigh']:
+        return 1
+    elif laplacian > image_quality['High']:
+        return 0.8
+    elif laplacian > image_quality['Middle']:
+        return 0.6
+    elif laplacian > image_quality['Low']:
+        return 0.4
+    else:
+        return 0.2
+    
+
 def thickening(thin_img, ksize=(5, 5), iterations=2, preserve_features=True):
     """
     brief:  对细化后的数字进行加粗
@@ -180,7 +222,7 @@ def thickening(thin_img, ksize=(5, 5), iterations=2, preserve_features=True):
     
     return smoothed
 
-def digit_sharpening(image: str | cv2.typing.MatLike):
+def digit_process(image: str | cv2.typing.MatLike):
     """
     brief:  对尺寸小且模糊的数字图像进行处理、 返回尺寸大且较为清晰的数字图像
     param:  @image: 输入的图像为灰度图或二值图矩阵, 或任意类型图像的路径
@@ -191,7 +233,11 @@ def digit_sharpening(image: str | cv2.typing.MatLike):
     else: 
         img = image
     img = enhanced_upscale(img, (100, 100))                     #放大模糊图像,目标尺寸太大会增加细化时间
-    th, img = cv2.threshold(img, 150, 255, cv2.THRESH_BINARY)   #二值化、可能需要调阈值
+    
+    #根据图像质量进行二值化
+    img_quality = laplacian_var(image)
+    th, img = cv2.threshold(img, 127 * (2 - img_quality), 255, cv2.THRESH_BINARY)
+
     img = img < th                                              #01化并反转前景和背景
     img = denoising(img.astype(np.uint8), 80)                   #去噪
     img = zhangSuen(img)                                        #细化
@@ -200,9 +246,63 @@ def digit_sharpening(image: str | cv2.typing.MatLike):
     img = thickening(img, iterations=2)                         #加粗前景
     return img                                                  #反转前景和背景
 
+
+def digits_split(image: cv2.typing.MatLike, precut_edge: int = 0)->list[cv2.typing.MatLike]:
+    """ 
+    brief:  将多位数字图像进行分割
+    param:  @image: 输入的图像为灰度图或二值图矩阵
+            @precut_edge: 处理图像前, 对图像边框进行裁剪的大小
+    return: 返回被分割的图像列表
+    """
+    height, width = image.shape[:2]
+    image = image[precut_edge : height - precut_edge, precut_edge : width - precut_edge]
+    threshold = (height + width) // 50                  #设置阈值避免噪声干扰
+
+    def continuous_segments(projection):
+        in_digit = False                                #表明是否在数字内
+        segments = []                                   #记录每一段的位置
+        nonlocal threshold
+        for i, count in enumerate(projection):
+            if count >= 0 and not in_digit:
+                in_digit = True
+                start = i
+            elif count == 0 and in_digit:
+                in_digit = False
+                segments.append((start, i))
+            
+        if in_digit:                                    #遍历结束后还在数字内
+            segments.append((start, len(projection) - 1))
+
+        #过滤掉连续长度小于阈值的段
+        segments = list(filter(lambda seg: seg[1] - seg[0] >= threshold, segments))
+        return segments
+
+    vprojection = np.sum(image, axis=0)                 #计算每列垂直投影像素(1)和
+    seg = continuous_segments(vprojection)
+    #垂直方向扫描到多个数字
+    if len(seg) > 1:                                   
+        digits = []
+        for dig_start, dig_end in seg:
+            digit_image = image[:, dig_start : dig_end]
+            digits.append(digit_image)
+    
+        return digits
+    
+    hprojection = np.sum(image, axis=1)                 #计算每行水平投影像素(1)和
+    seg = continuous_segments(hprojection)
+    #水平方向扫描到多个数字
+    if len(seg) > 1:                                   
+        digits = []
+        for dig_start, dig_end in seg:
+            digit_image = image[dig_start : dig_end, :]
+            digits.append(digit_image)
+    
+        return digits
+    return [image]
+    
+
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    img = digit_sharpening('./images/dtcdig/2/2.png_cropped_2.jpg')
-    print(img)
-    plt.imshow(img)
-    plt.show()
+    img = cv2.imread('./images/dtcdig/77/77.jpg_cropped_3.jpg')
+    score = laplacian_var(img)
+    print(f"Laplacian清晰度得分: {score}")

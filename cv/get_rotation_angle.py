@@ -3,13 +3,14 @@ import numpy as np
 import math
 import os
 from typing import Union
-from blurred_digimg_processing import digit_sharpening
+import blurred_digit_image_process as bdp
 
 """
 下面是匹配模板, 对应不同角度(顺时针旋转)下的数字模板. 模板匹配采用了水平和垂直方向的线各三条, 模板的axis0表示每个数字的特征; 
 axis1表示垂直线(前三, 从左到右)、水平线(后三, 从上到下)与数字的特征交点; axis2表示交点的位置左(上)/中/右(下)
 """
-template_0 = np.int32([[[1, 0, 0], [1, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1], [0, 0, 1]],    #1
+template_0 = np.int32([[[1, 0, 1], [1, 0, 1], [1, 0, 1], [1, 0, 1], [1, 0, 1], [1, 0, 1]],    #0
+                        [[1, 0, 0], [1, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1], [0, 0, 1]],   #1
                         [[1, 0, 2], [1, 0, 2], [1, 1, 1], [1, 0, 1], [0, 0, 1], [1, 0, 0]],   #2
                         [[1, 1, 1], [1, 1, 1], [1, 1, 1], [0, 0, 1], [0, 0, 1], [1, 0, 1]],   #3
                         [[0, 1, 1], [1, 0, 1], [1, 0, 1], [0, 1, 1], [1, 0, 1], [1, 0, 1]],   #4!
@@ -19,7 +20,8 @@ template_0 = np.int32([[[1, 0, 0], [1, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1], [
                         [[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 0, 1], [1, 0, 1], [1, 0, 1]],   #8!
                         [[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 0, 1], [1, 0, 1], [0, 0, 1]]])  #9!
 
-template_90 = np.int32([[[0, 0, 1], [0, 0, 1], [1, 0, 1], [0, 0, 1], [0, 0, 1], [0, 0, 1]],   #1
+template_90 = np.int32([[[1, 0, 1], [1, 0, 1], [1, 0, 1], [1, 0, 1], [1, 0, 1], [1, 0, 1]],   #0
+                        [[0, 0, 1], [0, 0, 1], [1, 0, 1], [0, 0, 1], [0, 0, 1], [0, 0, 1]],   #1
                         [[1, 0, 0], [0, 0, 1], [1, 0, 1], [2, 0, 1], [2, 0, 1], [1, 1, 1]],   #2
                         [[1, 0, 1], [0, 0, 1], [0, 0, 1], [1, 0, 1], [1, 1, 1], [1, 1, 1]],   #3
                         [[1, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 0], [1, 0, 1], [1, 0, 1]],   #4
@@ -29,7 +31,8 @@ template_90 = np.int32([[[0, 0, 1], [0, 0, 1], [1, 0, 1], [0, 0, 1], [0, 0, 1], 
                         [[1, 0, 1], [0, 1, 0], [1, 0, 1], [1, 1, 1], [1, 1, 1], [1, 1, 1]],   #8
                         [[0, 0, 1], [1, 0, 1], [1, 0, 1], [1, 1, 1], [1, 1, 1], [1, 1, 1]]])  #9
 
-template_180 = np.int32([[[0, 0, 1], [0, 0, 1], [0, 0, 1], [1, 0, 0], [1, 0, 0], [1, 0, 1]],  #1
+template_180 = np.int32([[[1, 0, 1], [1, 0, 1], [1, 0, 1], [1, 0, 1], [1, 0, 1], [1, 0, 1]],  #0
+                        [[0, 0, 1], [0, 0, 1], [0, 0, 1], [1, 0, 0], [1, 0, 0], [1, 0, 1]],   #1
                         [[1, 1, 1], [2, 0, 1], [2, 0, 1], [0, 0, 1], [1, 0, 0], [1, 0, 1]],   #2
                         [[1, 1, 1], [1, 1, 1], [1, 0, 1], [1, 0, 1], [1, 0, 0], [1, 0, 0]],   #3
                         [[1, 0, 1], [1, 0, 1], [1, 1, 0], [1, 0, 1], [1, 0, 1], [1, 1, 0]],   #4
@@ -39,7 +42,8 @@ template_180 = np.int32([[[0, 0, 1], [0, 0, 1], [0, 0, 1], [1, 0, 0], [1, 0, 0],
                         [[1, 1, 1], [1, 1, 1], [1 ,1, 1], [1, 0, 1], [1, 0, 1], [1, 0, 1]],   #8
                         [[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 0, 0], [1, 0, 1], [1, 0, 1]]])  #9
 
-template_270 = np.int32([[[1, 0, 1], [1, 0, 0], [1, 0, 0], [1, 0, 0], [1, 0, 0], [1, 0, 0]],  #1
+template_270 = np.int32([[[1, 0, 1], [1, 0, 1], [1, 0, 1], [1, 0, 1], [1, 0, 1], [1, 0, 1]],  #0
+                        [[1, 0, 1], [1, 0, 0], [1, 0, 0], [1, 0, 0], [1, 0, 0], [1, 0, 0]],   #1
                         [[1, 0, 1], [1, 0, 0], [0, 0, 1], [1, 1, 1], [1, 0, 2], [1, 0, 2]],   #2
                         [[1, 0, 0], [1, 0, 0], [1, 0, 1], [1, 1, 1], [1, 1, 1], [1, 0, 1]],   #3
                         [[1, 1, 0], [1, 0, 1], [1, 0, 1], [1, 0, 1], [1, 0, 1], [0, 1, 1]],   #4
@@ -176,7 +180,7 @@ def get_matched_template(templates: list[np.ndarray], to_match: np.ndarray):
     matched_more = []
     #这里顺序为3、1、0、2表示270°匹配优先级最高、90°次之...
     for i in [3, 1, 0, 2]:
-        for j in range(0, 9):
+        for j in range(0, 10):
             dev = sum(sum((templates[i][j] - to_match) ** 2))
             if dev < min_dev: 
                 min_dev = dev
@@ -202,34 +206,34 @@ def rotation_angle(image_mats: list[np.ndarray]):
         pixel_cnt = 0                                   #穿过的连通域的计数器
         space_cnt = 0                                   #穿过的空白区域计数器
 
-        """保存交点位置"""
+        #保存交点位置
         cross_points = np.int32([[0 for i in range(0, 3)] for i in range(0, 6)])
-        
-        image_mat = crop_bounding_rect(image_mat, 10)               #截取最小外接矩形
-        image_mat = (1 - image_mat) * 255                       #去0、1化
+        #截取最小外接矩形
+        image_mat = crop_bounding_rect(image_mat)   
+        image_mat = (1 - image_mat) * 255               #去归一化
 
         height, width = image_mat.shape[0:2]
         hlines = (height // 4, height // 2, height * 3 // 4)
         vlines = (width // 4, width // 2, width * 3 // 4)
 
-        cv2.line(image_mat, (vlines[0], 0), [vlines[0], height], 127)
-        cv2.line(image_mat, (vlines[1], 0), [vlines[1], height], 127)
-        cv2.line(image_mat, (vlines[2], 0), [vlines[2], height], 127)
-        cv2.line(image_mat, (0, hlines[0]), [width, hlines[0]], 127)
-        cv2.line(image_mat, (0, hlines[1]), [width, hlines[1]], 127)
-        cv2.line(image_mat, (0, hlines[2]), [width, hlines[2]], 127)
+        # cv2.line(image_mat, (vlines[0], 0), [vlines[0], height], 127)
+        # cv2.line(image_mat, (vlines[1], 0), [vlines[1], height], 127)
+        # cv2.line(image_mat, (vlines[2], 0), [vlines[2], height], 127)
+        # cv2.line(image_mat, (0, hlines[0]), [width, hlines[0]], 127)
+        # cv2.line(image_mat, (0, hlines[1]), [width, hlines[1]], 127)
+        # cv2.line(image_mat, (0, hlines[2]), [width, hlines[2]], 127)
 
         thick_uppper = int(1 / 2 * height)              #线宽上阈值，超过该值将线视为两个交点
         thick_bottom = int(1 / 40 * height)             #线宽下阈值，低于该值不被视为交点
-        mid_treshold = int(1 / 14 * height)              #距离中点距离小于该值被视为中点交点
+        mid_treshold = int(1 / 14 * height)             #距离中点距离小于该值被视为中点交点
         sepspace = int(1 / 50 * height)                 #穿过的空白区域小于该阈值视为连通
 
         #垂直线
         for i in range(0, len(vlines)):
             old = 0
             for j in range(0, height): 
-                if image_mat[j][vlines[i] - 1] == 0:    #与数字相交
-                    if 0 < space_cnt < sepspace and old != 0:
+                if image_mat[j][vlines[i] - 1] == 0:                        #与数字相交
+                    if 0 < space_cnt < sepspace and old != 0:               #两交点像素间的空白小于阈值,算作交点像素
                         pixel_cnt += space_cnt
                     space_cnt = 0
 
@@ -244,7 +248,7 @@ def rotation_angle(image_mats: list[np.ndarray]):
                             add_cross_point(cross_points, (height, width), old, i, mid_treshold)
                             add_cross_point(cross_points, (height, width), j, i, mid_treshold)
                         pixel_cnt = old = 0
-                else :                                  #与数字不相交
+                else :                                                      #与数字不相交
                     space_cnt += 1
                     if space_cnt >= sepspace or j == height - 1:
                         if thick_bottom <= pixel_cnt <= thick_uppper:         #穿过的连通区域在两阈值之间，被视为一个点
@@ -253,12 +257,10 @@ def rotation_angle(image_mats: list[np.ndarray]):
                             add_cross_point(cross_points, (height, width), old, i, mid_treshold)
                             add_cross_point(cross_points, (height, width), j - space_cnt, i, mid_treshold)
                         pixel_cnt = old = space_cnt = 0
-            space_cnt = pixel_cnt = 0
 
-        #如果采用digit_sharpening函数对图像进行了处理，这里就可以注释掉
         thick_uppper = int(1 / 2 * width)            #线宽上阈值，超过该值将线视为两个交点
         thick_bottom = int(1 / 40 * width)           #线宽下阈值，低于该值不被视为交点
-        mid_treshold = int(1 / 12 * width)            #距离中点距离小于该值被视为中点交点
+        mid_treshold = int(1 / 12 * width)           #距离中点距离小于该值被视为中点交点
         sepspace = int(1 / 50 * width)               #穿过的空白区域小于该阈值视为连通
 
         #水平线
@@ -266,7 +268,7 @@ def rotation_angle(image_mats: list[np.ndarray]):
             old = 0
             for j in range(0, width): 
                 if image_mat[hlines[i] - 1][j] == 0:                        #与数字相交
-                    if 0 < space_cnt < sepspace and old != 0:
+                    if 0 < space_cnt < sepspace and old != 0:               #两交点像素间的空白小于阈值,算作交点像素
                         pixel_cnt += space_cnt
                     space_cnt = 0
 
@@ -315,17 +317,20 @@ def rotation_angle(image_mats: list[np.ndarray]):
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
-    image_paths = ["./images/dtcdig/{0}/{0}.jpg_cropped_{1}.jpg".format(7, i) for i in (4, 5)]
+    image_paths = ["./images/dtcdig/{0}/{0}.jpg_cropped_{1}.jpg".format(15, i) for i in (7,8,6)]
     plt.figure(figsize=(14, 6))
 
     image_mats = []
     for image_path in image_paths:
-        img = digit_sharpening(image_path)
+        img = bdp.digit_process(image_path)                  #处理图像
+
         """对正向的图进行旋转"""
         dummy1, image_mat, dummy2 = center_affine_transform(
-            img, angle=0, scale=1.0
+            img, angle=270, scale=1.0
         )
-        image_mats.append(image_mat)
+
+        split = bdp.digits_split(image_mat, sum(img.shape[:2]) // 40)   #分割图像
+        image_mats.extend(split)
 
     angle = rotation_angle(image_mats)
     print(angle)
